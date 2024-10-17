@@ -33,7 +33,8 @@ while($row = $result->fetch_assoc()) {
         'firstname' => $row['firstname'],
         'lastname'  => $row['lastname'],
         'email'     => $row['email'],
-        'username'  => $row['username']
+        'username'  => $row['username'],
+        'profile_picture' => isset($profile['profile_picture']) ? $profile['profile_picture'] : ''
     ];
 }
 
@@ -63,7 +64,7 @@ $error   = [
     'shoutout' => '',
     'personal' => '',
     'account'  => '',
-    'password' => ''
+    'password' => '',
 ];
 
 // helpers
@@ -73,7 +74,6 @@ if(!isset($user))
 require_once 'helpers/get-all-users.php';
 if(!isset($users))
     exit();
-
 
 // process new shout-out submission only if there's a signed-in user and this profile is for someone else
 if(isset($_POST['shout-out']) && isset($_SESSION['example1_user_id']) && $profile['id'] != $user['id'])
@@ -125,13 +125,42 @@ if(isset($_POST['delete-shout-out']) && isset($_SESSION['example1_user_id']))
 }
 
 // process update personal information request when the form is submitted
-if(isset($_POST['update-personal']))
-{
+if(isset($_POST['update-personal'])) {
     // get submitted personal data
     $firstname = trim($_POST['firstname']);
-    $lastname  = trim($_POST['lastname']);
+    $lastname = trim($_POST['lastname']);
 
-    // validate personal data: no fields should be empty
+    // Process profile picture upload
+    if (isset($_FILES['profile_picture'])) {
+        $filename = $_FILES['profile_picture']['name'];
+        $file_ext = pathinfo($filename, PATHINFO_EXTENSION);
+        $allowed_extensions = array("jpg", "jpeg", "png", "gif");
+
+        if (in_array($file_ext, $allowed_extensions)) {
+            $upload_dir = 'uploads/profile_pictures/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+
+            $new_filename = uniqid() . "." . $file_ext;
+            $upload_file = $upload_dir . $new_filename;
+
+            if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $upload_file)) {
+                $stmt = $conn->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
+                $stmt->bind_param("si", $new_filename, $profile['id']);
+                $stmt->execute();
+                header('Location: profile.php');
+                exit;
+            } else {
+                $error['profile_picture'] = "Error uploading file!";
+            }
+        } else {
+            $error['profile_picture'] = "Only " . implode(", ", $allowed_extensions) . " files allowed!";
+        }
+    }
+}
+
+// validate personal data: no fields should be empty
     if(empty($firstname) || empty($lastname)) {
         $error['personal'] = 'All fields are required.';
     }
@@ -144,8 +173,8 @@ if(isset($_POST['update-personal']))
         // if update is successful, redirect to self (profile.php) so that [get-user-data.php] can query the updated user again
         if($stmt->affected_rows > 0) {
             header('location: profile.php?id=' . $user['id'] . '&tab=settings');
+
         }
-    }
 }
 
 // process update account information request when the form is submitted
@@ -243,17 +272,24 @@ if(isset($_POST['update-password']))
 <?php require_once 'partials/navbar.php'; ?>
 
 
-<!-- main content -->
-<main class="container pt-3">
-    <!-- content header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div class="d-flex align-items-center gap-3">
-            <h2 class="m-0"><i class="fas fa-fw fa-user-circle"></i> <?= htmlspecialchars($profile['firstname']) ?> <?= htmlspecialchars($profile['lastname']) ?></h2>
+    <!-- main content -->
+    <main class="container pt-3">
+        <!-- content header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <?php
+                if (!empty($profile['profile_picture']) && file_exists('uploads/profile_pictures/' . $profile['profile_picture'])) {
+                    echo '<img src="uploads/profile_pictures/' . $profile['profile_picture'] . '" alt="Profile Picture" width="40" height="40" class="rounded-circle">';
+                } else {
+                    echo '<i class="fas fa-fw fa-user-circle"></i>';
+                }
+                ?>
+                <h2 class="m-0"><?= htmlspecialchars($profile['firstname']) ?> <?= htmlspecialchars($profile['lastname']) ?></h2>
+            </div>
+            <a href="index.php" class="btn btn-outline-dark">
+                <i class="fas fa-fw fa-arrow-left"></i> Home
+            </a>
         </div>
-        <a href="index.php" class="btn btn-outline-dark">
-            <i class="fas fa-fw fa-arrow-left"></i> Home
-        </a>
-    </div>
 
     <!-- tabs -->
     <ul class="nav nav-tabs">
@@ -401,12 +437,26 @@ if(isset($_POST['update-password']))
                                         <input type="text" class="form-control" id="lastname" name="lastname" value="<?= htmlspecialchars($user['lastname']) ?>" required>
                                     </div>
                                 </div>
+                                <!-- Profile picture upload form -->
+                                <form action="profile.php" method="post" enctype="multipart/form-data">
+                                    <input type="file" name="profile_picture">
+                                    <button type="submit" name="set_profile_picture" class="btn btn-dark">Set as Profile Picture</button>
+                                </form>
 
-                                <!-- error message (if there's any) -->
-                                <?php if($error['personal'] != '') { ?>
-                                    <p class="text-danger"><i class="fas fa-fw fa-exclamation-circle"></i> <?= $error['personal'] ?></p>
-                                <?php } ?>
-
+                                <!-- Display profile picture -->
+                                <?php
+                                if (!empty($profile['profile_picture'])) {
+                                    echo "File path: uploads/profile_pictures/" . $profile['profile_picture'] . "
+";
+                                    if (file_exists('uploads/profile_pictures/' . $profile['profile_picture'])) {
+                                        echo '<img src="uploads/profile_pictures/' . $profile['profile_picture'] . '" alt="Profile Picture">';
+                                    } else {
+                                        echo "File not found!";
+                                    }
+                                } else {
+                                    echo '<img src="default_profile_picture.jpg" alt="Default Profile Picture">';
+                                }
+                                ?>
                                 <!-- update personal information button -->
                                 <div class="d-flex justify-content-end">
                                     <button type="submit" name="update-personal" class="btn btn-dark">Update</button>
