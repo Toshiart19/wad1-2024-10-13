@@ -1,12 +1,15 @@
 <?php
 /**
- * Auth on Session using Hashed Password on Database [Example 2]
+ * Auth with Remember Option using Hashed Password on Database [Example 4]
  * profile: User profile page
  */
 
 // initialize session
 session_start();
 
+
+// get remembered data
+require_once 'helpers/get-remembered-data.php';
 
 // set database connection
 require_once 'config/database.php';
@@ -20,10 +23,10 @@ if(isset($_GET['id'])) {
     $stmt = $conn->prepare("SELECT * FROM `users` WHERE `id` = ?");
     $stmt->bind_param("i", $_GET['id']);
 }
-else if(isset($_SESSION['example2_username']) && isset($_SESSION['example2_password'])) {
+else if(isset($_SESSION['example4_username']) && isset($_SESSION['example4_password'])) {
     // stored in session
     $stmt = $conn->prepare("SELECT * FROM `users` WHERE `username` = ? AND `password` = ?");
-    $stmt->bind_param("ss", $_SESSION['example2_username'], $_SESSION['example2_password']);
+    $stmt->bind_param("ss", $_SESSION['example4_username'], $_SESSION['example4_password']);
 }
 if($stmt != null) {
     $stmt->execute();
@@ -54,7 +57,7 @@ if(isset($_GET['tab'])) {
         $tab = $_GET['tab'];
 }
 // only authenticated user should have access to 'settings' tab
-if($tab == 'settings' && (!isset($_SESSION['example2_username']) || !isset($_SESSION['example2_password']) || $profile['username'] !== $_SESSION['example2_username'] || $profile['password'] !== $_SESSION['example2_password'])) {
+if($tab == 'settings' && (!isset($_SESSION['example4_username']) || !isset($_SESSION['example4_password']) || $profile['username'] !== $_SESSION['example4_username'] || $profile['password'] !== $_SESSION['example4_password'])) {
     $tab = 'received';
 }
 
@@ -79,7 +82,7 @@ if(!isset($users))
 
 
 // process new shout-out submission only if there's a signed-in user and this profile is for someone else
-if(isset($_POST['shout-out']) && isset($_SESSION['example2_username']) && isset($_SESSION['example2_password']) && $profile['id'] != $user['id'])
+if(isset($_POST['shout-out']) && isset($_SESSION['example4_username']) && isset($_SESSION['example4_password']) && $profile['id'] != $user['id'])
 {
     // get submitted shout-out
     $user_mode     = 'selected';
@@ -105,7 +108,7 @@ if(isset($_POST['shout-out']) && isset($_SESSION['example2_username']) && isset(
 }
 
 // process new shout-out deletion
-if(isset($_POST['delete-shout-out']) && isset($_SESSION['example2_username']) && isset($_SESSION['example2_password']))
+if(isset($_POST['delete-shout-out']) && isset($_SESSION['example4_username']) && isset($_SESSION['example4_password']))
 {
     // get submitted shout-out id
     $shout_out_id = $_POST['shout-out-id'];
@@ -195,8 +198,10 @@ if(isset($_POST['update-account']))
         $stmt->execute();
         // if update is successful, redirect to self (profile.php) so that [get-user-data.php] can query the updated user again
         if($stmt->affected_rows > 0) {
-            // update username in session
-            $_SESSION['example2_username'] = $username;
+            // update username in session and remembered data (if available)
+            $_SESSION['example4_username'] = $username;
+            if(isset($_COOKIE['example4_username']))
+                setcookie('example4_username', $username, time() + (7 * 24 * 60 * 60));
             header('location: profile.php?id=' . $user['id'] . '&tab=settings');
         }
     }
@@ -234,8 +239,10 @@ if(isset($_POST['update-password']))
         $stmt->bind_param("si", $hashed_password, $user['id']);
         $stmt->execute();
 
-        // update password in session
-        $_SESSION['example2_password'] = $hashed_password;
+        // update password in session and remembered data (if available)
+        $_SESSION['example4_password'] = $hashed_password;
+        if(isset($_COOKIE['example4_password']))
+            setcookie('example4_password', $hashed_password, time() + (7 * 24 * 60 * 60));
     }
 }
 ?>
@@ -274,7 +281,7 @@ if(isset($_POST['update-password']))
     </ul>
     <div class="bg-white border-top-0 border-b" style="border: 1px solid #dee2e6">
         <!-- shout-out form -->
-        <?php if(isset($_SESSION['example2_username']) && isset($_SESSION['example2_password']) && $profile['id'] != $user['id'] && $tab == 'received') { ?>
+        <?php if(isset($_SESSION['example4_username']) && isset($_SESSION['example4_password']) && $profile['id'] != $user['id'] && $tab == 'received') { ?>
             <div class="p-3 pb-0">
                 <form method="POST" action="profile.php?id=<?= $profile['id'] ?>">
                     <div class="row">
@@ -326,7 +333,7 @@ if(isset($_POST['update-password']))
                                         <i class="fas fa-fw fa-user-circle opacity-75"></i>
                                         <a href="profile.php?id=<?= $shout_out['user_id'] ?>" class="text-decoration-none">
                                         <?php
-                                        if($shout_out['user_id'] == $user['id'] && isset($_SESSION['example2_username']) && isset($_SESSION['example2_password'])) {
+                                        if($shout_out['user_id'] == $user['id'] && isset($_SESSION['example4_username']) && isset($_SESSION['example4_password'])) {
                                             echo "(me) ";
                                         }
                                         ?>
@@ -348,7 +355,7 @@ if(isset($_POST['update-password']))
                                                 // selected user (referenced from the $users global array using key 'u-{selected_user of this shout-out}') -->
                                                 if($shout_out['user_mode'] == 'selected') {
                                                     echo '<a href="profile.php?id=' . $shout_out['selected_user'] . '" class="text-decoration-none">';
-                                                    if($shout_out['selected_user'] == $user['id'] && isset($_SESSION['example2_username']) && isset($_SESSION['example2_password'])) {
+                                                    if($shout_out['selected_user'] == $user['id'] && isset($_SESSION['example4_username']) && isset($_SESSION['example4_password'])) {
                                                         echo "(me) ";
                                                     }
                                                     echo htmlspecialchars($users['u-' . $shout_out['selected_user']]['firstname']) . '&nbsp;';
